@@ -1,0 +1,211 @@
+﻿// ==UserScript==
+// @name           Workplace Accessibility Fixes
+// @namespace      http://github.com/mltony/
+// @description    Improves the accessibility of Workplace
+// @author         Tony Malykh <tmal@fb.com>
+// @copyright 2020
+// @license GNU General Public License version 2.0
+// @version        2020.1
+
+// @include https://fb.workplace.com/*permalink*
+// @include https://fb.workplace.com/*/posts/*
+// @include https://fb.workplace.com/notes/*
+// ==/UserScript==
+
+
+function makeHeading(elem, level) {
+    elem.setAttribute("role", "heading");
+    elem.setAttribute("aria-level", level);
+}
+
+var timestampDubDub = 0;
+function playDubDub() {
+    var date = new Date();
+    var timestamp = date. getTime();
+    if (timestamp - timestampDubDub < 1000) {
+        return;
+    }
+    timestampDubDub = timestamp;
+    var audio = new Audio("https://sound.peal.io/ps/audios/000/000/537/original/woo_vu_luvub_dub_dub.wav");
+    audio.play();
+}
+
+var timestampError = 0;
+function playError() {
+    var date = new Date();
+    var timestamp = date. getTime();
+    if (timestamp - timestampError < 1000) {
+        return;
+    }
+    timestampError = timestamp;
+    var audio = new Audio("https://www.myinstants.com/media/sounds/erro.mp3");
+    audio.play();
+}
+
+var liveId = "aria_live_announcer";
+var myTimeout = null;
+function speakMessage(text, suppressRepeats) {
+    //console.log("m1");
+    var live = document.getElementById(liveId);
+    //console.log("m2");
+    if (live == null) {
+        var live = document.createElement("div");
+        live.setAttribute("aria-live", "assertive");
+        live.id = liveId;
+        var body = document.querySelector("body");
+        body.append(live);
+    }
+    if (suppressRepeats && live.textContent == text) {
+        return;
+    }
+    live.setAttribute("aria-hidden", "False");
+    // Use a new div so this is treated as an addition, not a text change.
+    // Otherwise, the browser will attempt to calculate a diff between old and new text,
+    // which could result in partial reporting or nothing depending on the previous text.
+    live.innerHTML = "<div></div>";
+    live.firstChild.textContent = text;
+    clearTimeout(myTimeout);
+    myTimeout = setTimeout(() => {
+        live.innerHTML = "";
+        //live.setAttribute("aria-hidden", "true");
+    } , 300);
+}
+
+function findParentUl(elem) {
+    while (elem != null) {
+        if (elem.nodeName.toLowerCase() == "ul") {
+            return elem;
+        }
+        elem = elem.parentElement;
+    }
+    return null;
+}
+
+function textNodesUnder(el){
+  var n, a=[], walk=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null,false);
+  while(n=walk.nextNode()) a.push(n);
+  return a;
+}
+
+
+var fdt = null;
+function fixDocument() {
+    try {
+        var cache = new Set();
+        //playDubDub();
+        
+        for (elem of document.querySelectorAll("div[role=article]")) {
+            // These are comments.
+
+            // List of comments is inside <ul> list
+            // TODO: also it seems like I can find comment section as div.tvmbv18p
+            var ul = findParentUl(elem);
+            if (ul == null) {
+                continue;
+            }
+            
+            for (text of textNodesUnder(elem)) {
+                if (text.textContent == "See More") {
+                    try {
+                        text.parentElement.click();
+                    } catch (e) {
+                        //pass
+                    }
+                }
+            }            
+            
+            if ((ul == null) || (cache.has(ul))) {
+                continue;
+            }
+            cache.add(ul);
+            //playDubDub();
+            
+            for (text of textNodesUnder(ul)) {
+                //break;
+                if (/^1 Reply|^\d+ Replies/.test(text.textContent)) {
+                    text.parentElement.click();
+                }
+                playDubDub();
+            }
+            
+            
+        }
+        
+    } catch (e) {
+        //playError();
+    }
+    //playDubDub();
+}
+
+function onNodeAdded(target) {
+    if (fdt == null) {
+        fdt = setTimeout(fixDocument, 1000);
+    }
+}
+
+function onClassModified(target) {
+    onNodeAdded(target);
+}
+
+var observer = new MutationObserver(function(mutations) {
+    for (var mutation of mutations) {
+        try {
+            if (mutation.type === "childList") {
+                for (var node of mutation.addedNodes) {
+                    if (node.nodeType != Node.ELEMENT_NODE)
+                        continue;
+                    onNodeAdded(node);
+                }
+            } else if (mutation.type === "attributes") {
+                //if (mutation.attributeName == "class")
+                    onClassModified(mutation.target);
+            }
+        } catch (e) {
+            // Catch exceptions for individual mutations so other mutations are still handled.
+            console.log("Exception while handling mutation: " + e);
+        }
+    }
+});
+observer.observe(document, {childList: true, attributes: true,
+    subtree: true, attributeFilter: ["class"]
+});
+
+function iteration(){
+    setTimeout(iteration, 500);
+    //playDubDub();
+    // Catching and expanding buttons "View 3 more threads"
+    // For some reason I wasn't able to catch them when they appear, so we have to keep constantly monitor the page every 500 ms.
+    for (belem of document.querySelectorAll("div[role=button]")) {
+        if (/.*View \d+ (more|previous) (comments?|reply|replies).*/.test(belem.textContent)) {
+            //playError();    
+            belem.click();
+        }
+    }    
+    //fixDocument();
+    manualExpand();
+}
+
+function manualExpand(){
+    //speakMessage("Expanding!");
+    //playDubDub();
+    for (text of textNodesUnder(document)) {
+        if (/^1 Reply|^\d+ Replies/.test(text.textContent)) {
+            text.parentElement.click();
+            //console.log('hahaha');
+            //console.log(text.textContent);
+        }
+        if (/^View \d+ more (reply|replies)/.test(text.textContent)) {
+            text.parentElement.click();
+        }
+    }
+}
+document.addEventListener('keydown', function(e) {
+  // pressed alt+q
+  if (e.keyCode == 81 && !e.shiftKey && !e.ctrlKey && e.altKey && !e.metaKey) {
+   manualExpand();
+  }
+}, false);
+setTimeout(iteration, 10);
+
+console.log('hahahaha');
+// python3 -m http.server
