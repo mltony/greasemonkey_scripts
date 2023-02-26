@@ -7,7 +7,7 @@
 // @license GNU General Public License version 2.0
 // @version        2020.1
 // @grant GM_log
-// @include https://qqqwww.internalfb.com/intern/daiquery/*
+// @include https://www.internalfb.com/intern/daiquery/*
 // ==/UserScript==
 
 
